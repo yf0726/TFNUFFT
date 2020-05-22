@@ -5,11 +5,6 @@ NUFFT CPU class
 
 from __future__ import absolute_import
 import tensorflow as tf
-
-# import scipy.sparse
-# import scipy.linalg
-# import scipy.special
-
 import helper
 
 
@@ -141,26 +136,6 @@ class NUFFT_cpu:
 
         return 0
 
-    def _precompute_sp(self):
-        """
-
-        Private: Precompute adjoint (gridding) and Toepitz interpolation
-                 matrix.
-
-        :param None:
-        :type None: Python Nonetype
-        :return: self: instance
-        """
-        try:
-            W0 = numpy.ones((self.st['M'],), dtype=numpy.complex64)
-            W = self.xx2k(self.adjoint(W0))
-            self.W = (W * W.conj()) ** 0.5
-            del W0
-            del W
-        except:
-            print("errors occur in self.precompute_sp()")
-            raise
-
     def reset_sense(self):
         self.volume['cpu_coil_profile'].fill(1.0)
 
@@ -189,20 +164,6 @@ class NUFFT_cpu:
 
         return y2
 
-    def adjoint_many2one(self, y):
-        """
-        Assume y.shape = self.multi_M
-        """
-        x2 = self.adjoint(y)
-        x = tf.math.conj(x2 * self.volume['cpu_coil_profile'])
-        try:
-            x3 = numpy.mean(x, axis=self.ndims)
-        except:
-            x3 = x
-        del x
-
-        return x3
-
     def solve(self, y, solver=None, *args, **kwargs):
         """
         Solve NUFFT_cpu.
@@ -230,7 +191,8 @@ class NUFFT_cpu:
         :return: y: The output numpy array, with the size of (M,) or (M, batch). sampled k space
         :rtype: numpy array with the dtype of numpy.complex64
         """
-        k = self.xx2k(self.x2xx(x))
+        k = self.x2xx(x)
+        k = self.xx2k(k)
         y = self.k2y(k)
 
         return y
@@ -264,8 +226,6 @@ class NUFFT_cpu:
         :return: x: The output numpy array, with size=Nd
         :rtype: numpy array with dtype =numpy.complex64
         """
-        # x2 = self.adjoint(self.forward(x))
-
         x2 = self.xx2x(self.k2xx(self.k2y2k(self.xx2k(self.x2xx(x)))))
 
         return x2
@@ -295,7 +255,12 @@ class NUFFT_cpu:
         Third, inplace FFT
         """
 
-        output_x = xx
+        output_x = tf.zeros(self.multi_Kd, dtype=self.dtype).numpy()
+        xx = xx.numpy()
+        for bat in range(0, self.batch):
+            output_x.ravel()[self.KdCPUorder * self.batch + bat] = xx.ravel()[
+                self.NdCPUorder * self.batch + bat]
+
         if len(self.Kd) == 3:
             k = tf.signal.fft3d(output_x)
         elif len(self.Kd) == 2:
@@ -303,23 +268,6 @@ class NUFFT_cpu:
 
         return k
 
-    def xx2k_one2one(self, xx):
-        """
-        Private: oversampled FFT on CPU
-
-        First, zeroing the self.k_Kd array
-        Second, copy self.x_Nd array to self.k_Kd array by cSelect
-        Third, inplace FFT
-        """
-
-        output_x = numpy.zeros(self.st['Kd'], dtype=self.dtype, order='C')
-
-        # for bat in range(0, self.batch):
-        output_x.ravel()[self.KdCPUorder] = xx.ravel()[self.NdCPUorder]
-
-        k = numpy.fft.fftn(output_x, axes=self.ft_axes)
-
-        return k
 
     def k2vec(self, k):
         k_vec = tf.reshape(k, self.multi_prodKd)
@@ -330,7 +278,6 @@ class NUFFT_cpu:
         gridding:
         '''
         y = self.sp.dot(k_vec) # self.sp: density compensation matrix
-        # y = self.st['ell'].spmv(k_vec)
 
         return y
 
@@ -345,9 +292,7 @@ class NUFFT_cpu:
         '''
        regridding non-uniform data (unsorted vector)
         '''
-        # k_vec = self.st['p'].getH().dot(y)
         k_vec = self.spH.dot(y)
-        # k_vec = self.st['ell'].spmvH(y)
 
         return k_vec
 
@@ -372,31 +317,19 @@ class NUFFT_cpu:
         Private: the inverse FFT and image cropping (which is the reverse of
                  _xx2k() method)
         """
-        #         dd = numpy.size(self.Kd)
         if len(self.Kd) == 3:
-            xx = tf.signal.ifft3d(k)
+            k = tf.signal.ifft3d(k)
         elif len(self.Kd) == 2:
-            xx = tf.signal.ifft2d(k)
-        xx = tf.cast(xx,dtype=self.dtype)
-        # xx = numpy.zeros(self.multi_Nd, dtype=self.dtype, order='C')
-        # for bat in range(0, self.batch):
-        #     xx.ravel()[self.NdCPUorder * self.batch + bat] = k.ravel()[
-        #         self.KdCPUorder * self.batch + bat]
+
+            k = tf.signal.ifft2d(k)
+        k = k.numpy()
+        xx = tf.zeros(self.multi_Nd, dtype=self.dtype)
+        xx = xx.numpy()
+        for bat in range(0, self.batch):
+            xx.ravel()[self.NdCPUorder * self.batch + bat] = k.ravel()[
+                self.KdCPUorder * self.batch + bat]
         return xx
 
-    def k2xx_one2one(self, k):
-        """
-        Private: the inverse FFT and image cropping
-                 (which is the reverse of _xx2k() method)
-        """
-        #         dd = numpy.size(self.Kd)
-
-        k = numpy.fft.ifftn(k, axes=self.ft_axes)
-        xx = numpy.zeros(self.st['Nd'], dtype=self.dtype, order='C')
-        # for bat in range(0, self.batch):
-        xx.ravel()[self.NdCPUorder] = k.ravel()[self.KdCPUorder]
-        # xx = xx[crop_slice_ind(self.Nd)]
-        return xx
 
     def xx2x(self, xx):
         """

@@ -9,7 +9,7 @@ from matplotlib import cm
 gray = cm.gray
 
 Nd = (64, 64, 64)  # time grid, tuple
-Kd = (64, 64, 64)  # frequency grid, tuple
+Kd = (128,128,128)  # frequency grid, tuple
 Jd = (3, 3, 3)  # interpolator
 
 DATA_PATH = '/Users/yan/Documents/document/EPFL/thesis/codes/3dgridding/pynufft-master/src/data/'
@@ -28,14 +28,13 @@ NufftObj.plan(om, Nd, Kd, Jd)
 kspace =NufftObj.forward(image)
 # print(1)
 
-NufftObj.selfadjoint(image)
 
 restore_image1 = NufftObj.solve(kspace, 'cg', maxiter=200)
 # restore_image2 = NufftObj.solve(kspace, 'L1TVOLS', maxiter=200, rho=0.1)
 # adj_img = NufftObj.adjoint(kspace)
 adj_img = NufftObj.selfadjoint(image)
 Nmid = int(Nd[0] *0.1)
-# plt.figure(figsize=(10,10))
+plt.figure(figsize=(10,10))
 plt.subplot(2, 2, 1)
 plt.imshow(abs(image[:, :, Nmid]), label='original', cmap=gray)
 plt.title('original at slice %s'%Nmid)
