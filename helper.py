@@ -16,7 +16,6 @@ def plan(om, Nd, Kd, Jd, ft_axes = None):
     :param ft_axes: Axes where FFT takes place
     :param format: Output format of the interpolator.
                     'CSR': the precomputed Compressed Sparse Row (CSR) matrix.
-                    'pELL': partial ELLPACK which precomputes the concatenated 1D interpolators.
     :type om: numpy.float
     :type Nd: tuple of int
     :type Kd: tuple of int
@@ -386,7 +385,7 @@ def dirichlet(x):
     # x = tf.where(tf.abs(x) < 1e-20, 1e-20 * tf.ones_like(x), x)
     # x = tf.sin(x) / x
     # x = tf.cast(x, dtype=tf.float32)
-    x = np.sinc(x)
+    x = np.sinc(x) ## the self defined sinc not work
     return x
 
 def mat_inv(A):
