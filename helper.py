@@ -137,7 +137,7 @@ def plan(om, Nd, Kd, Jd, ft_axes = None):
         kd += [tf.transpose(tmp), ]
 
     CSR = full_kron(ud, kd, Jd, Kd, M)
-    st['p'] = CSR
+    st['p'] = CSR # interpolator
     st['sn'] = tf.math.real(kronecker_scale(snd)) # only real scaling is
 
     return st #new

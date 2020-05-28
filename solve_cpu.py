@@ -47,7 +47,7 @@ def solve(nufft, y, solver=None, *args, **kwargs):
                'lgmres': scipy.sparse.linalg.lgmres,
                }
     k = nufft.y2k(y)
-    k2 = methods[solver](A, k.numpy().ravel(), *args, **kwargs)  # ,show=True)
+    k2 = methods[solver](A, k.numpy().ravel(), *args, **kwargs)
 
     xx = nufft.k2xx(k2[0].reshape(nufft.multi_Kd))
     x = xx / nufft.sn
