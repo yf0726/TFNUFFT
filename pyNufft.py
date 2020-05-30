@@ -76,8 +76,8 @@ class pyNUFFT:
 
         :Example:
 
-        # >>> from pynufft import NUFFT_cpu
-        # >>> NufftObj = NUFFT_cpu()
+        # >>> from pyNufft import pyNUFFT
+        # >>> NufftObj = pyNUFFT()
         # >>> NufftObj.plan(om, Nd, Kd, Jd)
 
         or
@@ -410,8 +410,6 @@ class pyNUFFT:
         """
 
         Xk = self.k2vec(k)
-        # k = self.spHsp.dot(Xk)
-        # k = self.spH.dot(self.sp.dot(Xk))
         k = self.y2vec(self.vec2y(Xk))
         k = self.vec2k(k)
         return k

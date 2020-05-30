@@ -33,9 +33,9 @@ def solve(nufft, y, solver=None, *args, **kwargs):
         """
 
     def spHsp(x):
-        k = x.reshape(nufft.multi_Kd, order='C')
+        k = x.reshape(nufft.Kd, order='C')
         k = nufft.k2y2k(k)
-        return tf.reshape(k,(-1,1))
+        return tf.reshape(k, (-1, 1))
 
     A = scipy.sparse.linalg.LinearOperator((nufft.Kdprod * nufft.batch, nufft.Kdprod * nufft.batch), matvec=spHsp,
                                            rmatvec=spHsp, )
@@ -49,6 +49,6 @@ def solve(nufft, y, solver=None, *args, **kwargs):
     k = nufft.y2k(y)
     k2 = methods[solver](A, k.numpy().ravel(), *args, **kwargs)
 
-    xx = nufft.k2xx(k2[0].reshape(nufft.multi_Kd))
+    xx = nufft.k2xx(k2[0].reshape(nufft.Kd))
     x = xx / nufft.sn
     return x
