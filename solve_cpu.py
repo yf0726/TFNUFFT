@@ -46,9 +46,9 @@ def solve(nufft, y, solver=None, *args, **kwargs):
                'gmres': scipy.sparse.linalg.gmres,
                'lgmres': scipy.sparse.linalg.lgmres,
                }
-    k = nufft.y2k(y)
+    k = nufft._y2k(y)
     k2 = methods[solver](A, k.numpy().ravel(), *args, **kwargs)
 
-    xx = nufft.k2xx(k2[0].reshape(nufft.Kd))
+    xx = nufft._k2xx(k2[0].reshape(nufft.Kd))
     x = xx / nufft.sn
     return x

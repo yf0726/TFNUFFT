@@ -1,5 +1,6 @@
 """
 Helper functions
+Mainly for implementing the equations in Fessler's paper
 =======================================
 """
 
@@ -58,9 +59,6 @@ def OMEGA_k(J, K, omd, Kd, dimid, dd, ft_flag):
     The original F-order (in Fessler and Sutton 2003) is not suitable for GPU array (C-order).
     Currently, in-place reshaping in F-order only works in numpy.
     """
-    #             if dimid > 0:  # trick: pre-convert these indices into offsets!
-    #                 #            ('trick: pre-convert these indices into offsets!')
-    #                 kd[dimid] = kd[dimid] * numpy.prod(Kd[0:dimid]) - 1
     return k_indx
 
 
@@ -76,8 +74,6 @@ def create_csr(uu, kk, Kd, Jd, M):
     csrshape = (M, numpy.prod(Kd))
 
     # Build sparse matrix (interpolator)
-    #     csr = scipy.sparse.csr_matrix((csrdata, (rowindx, colindx)),
-    #                                        shape=csrshape)
     csr = scipy.sparse.csr_matrix((csrdata, colindx, rowptr),
                                   shape=csrshape)
     return csr
@@ -94,11 +90,7 @@ def rdx_N(ud, kd, Jd):
 def full_kron(ud, kd, Jd, Kd, M):
     ud2, kd2, Jd2 = rdx_N(ud, kd, Jd)
     CSR = create_csr(ud2[0], kd2[0], Kd, Jd, M)  # must have
-    # Dimension reduction: Nd -> 1
-    # Tuple (Nd) -> array (shape = M*prodJd)
-
-    #     Note: the shape of uu and kk is (M, prodJd)
-    return CSR  # , ELL
+    return CSR
 
 
 def khatri_rao_k(kd):
@@ -113,24 +105,17 @@ def khatri_rao_k(kd):
 
         kk = block_outer_sum(kk, kd[dimid]) + 1  # outer sum of indices
         kk = kk.reshape((M, Jprod), order='C')
-    #         uu = numpy.einsum('mi,mj->mij', uu, ud[dimid])
-    #         uu = uu.reshape((M, Jprod), order='C')
 
     return kk
 
 
 def khatri_rao_u(ud):
     dd = len(ud)
-
-    #     kk = kd[0]  # [M, J1] # pointers to indices
     M = ud[0].shape[0]
     uu = ud[0]  # [M, J1]
     Jprod = ud[0].shape[1]
     for dimid in range(1, dd):
         Jprod *= ud[dimid].shape[1]  # numpy.prod(Jd[:dimid + 1])
-
-        #         kk = block_outer_sum(kk, kd[dimid]) + 1  # outer sum of indices
-        #         kk = kk.reshape((M, Jprod), order='C')
         uu = numpy.einsum('mi,mj->mij', uu, ud[dimid])
         uu = uu.reshape((M, Jprod), order='C')
 
@@ -370,7 +355,6 @@ def plan(om, Nd, Kd, Jd, ft_axes=None, format='CSR', radix=None):
 
     CSR = full_kron(ud, kd, Jd, Kd, M)
     st['p'] = CSR
-    #     st['ell'] = ELL
     st['sn'] = kronecker_scale(snd).real  # only real scaling is relevant
 
     return st  # new
@@ -560,10 +544,7 @@ def nufft_scale1(N, K, alpha, beta, Nmid):
     '''
     Calculate image space scaling factor
     '''
-    #     import types
-    #     if alpha is types.ComplexType:
     alpha = numpy.real(alpha)
-    #         print('complex alpha may not work, but I just let it as')
 
     L = len(alpha) - 1
     if L > 0:
@@ -595,7 +576,6 @@ def nufft_scale(Nd, Kd, alpha, beta):
 
 
 def mat_inv(A):
-    #     I = numpy.eye(A.shape[0], A.shape[1])
     B = scipy.linalg.pinv2(A)
     return B
 
@@ -608,16 +588,13 @@ def nufft_T(N, J, K, alpha, beta):
 
     #     import scipy.linalg
     L = numpy.size(alpha) - 1
-    #     print('L = ', L, 'J = ',J, 'a b', alpha,beta )
     cssc = numpy.zeros((J, J))
     [j1, j2] = numpy.mgrid[1:J + 1, 1:J + 1]
     overlapping_mat = j2 - j1
     for l1 in range(-L, L + 1):
         for l2 in range(-L, L + 1):
             alf1 = alpha[abs(l1)]
-            #             if l1 < 0: alf1 = numpy.conj(alf1)
             alf2 = alpha[abs(l2)]
-            #             if l2 < 0: alf2 = numpy.conj(alf2)
             tmp = overlapping_mat + beta * (l1 - l2)
 
             tmp = dirichlet(1.0 * tmp / (1.0 * K / N))
@@ -641,9 +618,6 @@ def nufft_r(om, N, J, K, alpha, beta):
         t0 = time.time()
         for l1 in range(-L, L + 1):
             alf = alpha[abs(l1)] * 1.0
-            #         if l1 < 0:
-            #             alf = numpy.conj(alf)
-            #             r1 = numpy.sinc(1.0*(arg+1.0*l1*beta)/(1.0*K/N))
             input_array = (arg + 1.0 * l1 * beta) / oversample_ratio
             r1 = dirichlet(input_array)
             rr = iterate_sum(rr, alf, r1)
@@ -655,7 +629,6 @@ def nufft_r(om, N, J, K, alpha, beta):
     dk = 1.0 * om / gam - nufft_offset0  # om/gam -  nufft_offset , [M,1]
     arg = outer_sum(-numpy.arange(1, J + 1) * 1.0, dk)
     L = numpy.size(alpha) - 1
-    #     print('alpha',alpha)
     rr = numpy.zeros((J, M), dtype=numpy.float32)
     rr = iterate_l1(L, alpha, arg, beta, K, N, rr)
     return (rr, arg)
