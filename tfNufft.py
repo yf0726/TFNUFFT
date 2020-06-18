@@ -93,6 +93,7 @@ class tfNUFFT:
         self.Nd = self.st['Nd']
         self.Kd = self.st['Kd']
         self.sn = self.st['sn']
+        # self.sn = tf.ones(shape=self.st['sn'].shape)
 
         if batch is None:  # single-coil
             self.parallel_flag = 0
@@ -106,7 +107,6 @@ class tfNUFFT:
         # self.multi_M = (self.st['M'],)
         self.M = (self.st['M'],)
         # self.multi_prodKd = (tf.math.reduce_prod(self.Kd),)
-
 
         self.sp = self.st['p'].copy().tocsr() #interpolator
         self.spH = (self.st['p'].getH().copy()).tocsr() #return the Hermitian transpose.
@@ -210,6 +210,8 @@ class tfNUFFT:
     def _xx2k(self, xx):
         """
         In this step we perform oversampled FFT on padded frequency domain, shape Kd.
+        Notice that the forward FFT does not perform normalization and the inverse transform are scaled by 1/n.
+        https://docs.scipy.org/doc/numpy-1.15.0/reference/routines.fft.html#normalization
         :param xx: The scaled image, with the size of self.Nd
         :type: Tensor with dtype = self.dtype, tf.complex64 default
         :return: The oversampled FFT data, with the size of self.Kd
@@ -248,7 +250,6 @@ class tfNUFFT:
         :return: Non-uniform K space data with size of self.M
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-
         y = tf.sparse.sparse_dense_matmul(self.sp, k_vec)
         return y
 
