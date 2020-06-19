@@ -108,8 +108,10 @@ class tfNUFFT:
         self.M = (self.st['M'],)
         # self.multi_prodKd = (tf.math.reduce_prod(self.Kd),)
 
-        self.sp = self.st['p'].copy().tocsr() #interpolator
-        self.spH = (self.st['p'].getH().copy()).tocsr() #return the Hermitian transpose.
+        # self.sp = self.st['p'].copy().tocsr()  # interpolator
+        # self.spH = (self.st['p'].getH().copy()).tocsr()  # return the Hermitian transpose.
+        self.sp = self.st['p'].copy().todense() #interpolator
+        self.spH = (self.st['p'].getH().copy()).todense() #return the Hermitian transpose.
 
         self.Kdprod = np.int32(np.prod(self.st['Kd']))
         self.Jdprod = np.int32(np.prod(self.st['Jd']))
@@ -125,8 +127,10 @@ class tfNUFFT:
         Convert numpy arrays needed in forward and adjoint operations into tensor.
         """
         self.sn = tf.cast(self.sn, dtype=self.dtype)
-        self.sp = self.convert_sparse_matrix_to_sparse_tensor(self.sp)
-        self.spH = self.convert_sparse_matrix_to_sparse_tensor(self.spH)
+        self.sp = tf.cast(self.sp, dtype=self.dtype)
+        self.spH = tf.cast(self.spH, dtype=self.dtype)
+        # self.sp = self.convert_sparse_matrix_to_sparse_tensor(self.sp)
+        # self.spH = self.convert_sparse_matrix_to_sparse_tensor(self.spH)
 
     def convert_sparse_matrix_to_sparse_tensor(self, X):
         """
@@ -250,7 +254,8 @@ class tfNUFFT:
         :return: Non-uniform K space data with size of self.M
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-        y = tf.sparse.sparse_dense_matmul(self.sp, k_vec)
+        y = tf.linalg.matmul(self.sp, k_vec)
+        # y = tf.sparse.sparse_dense_matmul(self.sp, k_vec)
         return y
 
     def _k2y(self, k):
@@ -274,7 +279,8 @@ class tfNUFFT:
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         '''
         # k_vec = self.spH.dot(y)
-        k_vec = tf.sparse.sparse_dense_matmul(self.spH, y)
+        k_vec = tf.linalg.matmul(self.spH, y)
+        # k_vec = tf.sparse.sparse_dense_matmul(self.spH, y)
         return k_vec
 
     def vec2k(self, k_vec):
