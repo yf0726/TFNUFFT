@@ -204,7 +204,7 @@ def min_max(N, J, K, alpha, beta, om, ft_flag):
     return u2
 
 
-def plan(om, Nd, Kd, Jd, ft_axes=None, format='CSR', radix=None):
+def plan(om, Nd, Kd, Jd, ft_axes=None):
     """
     Plan for the NUFFT object.
     :param om: Coordinate

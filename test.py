@@ -5,7 +5,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import cv2
 from matplotlib import cm
-import scipy.io as scio
 gray = cm.gray
 
 DATA_PATH = './data/'
@@ -15,12 +14,11 @@ image = np.load(DATA_PATH + 'phantom_3D_128_128_128.npz')['arr_0']
 image = cv2.resize(image,(48,48))
 image = image[:,:,::4]
 image = image[:,:,:-2]
-image = image[:-1,:-1,:-1]
+# image = image[:-1,:-1,:-1]
 
 
-
-traj = np.load(os.path.join(DATA_PATH, 'sparse_trajectory.npy'))
-new_traj = np.zeros_like(traj)
+traj = np.load(os.path.join(DATA_PATH, '3dspiral.npy'))
+new_traj = traj.copy()
 new_traj[:,0] = traj[:,1]
 new_traj[:,1] = traj[:,0]
 
@@ -38,30 +36,21 @@ Jd = (3, 3, 3)  # interpolator
 # adj_img2 = pyNufftObj.adjoint(kspace)
 # restore_image2 = pyNufftObj.solve(kspace, 'cg', maxiter=200)
 
+batch_image = np.expand_dims(image, axis=0)
+batch_image = np.tile(batch_image, [3,1,1,1])
+
 tfNufftObj = tfNUFFT()
-tfNufftObj.plan(om, Nd, Kd, Jd)
+tfNufftObj.plan(om, Nd, Kd, Jd,batch_image.shape[0])
 tfNufftObj.preapre_for_tf()
-kspace = tfNufftObj.forward(image)
+kspace = tfNufftObj.forward(batch_image)
 adj_img1 = tfNufftObj.adjoint(kspace)
-# restore_image1 = tfNufftObj.solve(kspace, 'cg', maxiter=200)
 
-# To check validity of Nufft approximation
-if Nd[0]//2==0:
-    E_k = scio.loadmat('./data/E_k_even.mat')['k']
-else:
-    E_k = scio.loadmat('./data/E_k_odd.mat')['k']
-
-adj_img2 = tfNufftObj.adjoint(E_k)
-
-Nmid = int(Nd[0] * 0.5)
+Nmid = int(Nd[2] * 0.5)
 plt.figure(figsize=(10,10))
-plt.subplot(2, 2, 1)
-plt.imshow(abs(image[:, :, Nmid]), label='original', cmap=gray)
+plt.subplot(1, 2, 1)
+plt.imshow(abs(batch_image[0, :, :, Nmid]), label='original', cmap=gray)
 plt.title('original at slice %s'%Nmid)
-plt.subplot(2, 2, 2)
-plt.imshow(abs(adj_img1[:, :, Nmid]), label='adj_ksp_nufft', cmap=gray)
+plt.subplot(1, 2, 2)
+plt.imshow(abs(adj_img1[0, :, :, Nmid]), label='adj_ksp_nufft', cmap=gray)
 plt.title('adjoint using ksp_nufft at slice %s'%Nmid)
-plt.subplot(2, 2, 3)
-plt.imshow(abs(adj_img2[:, :, Nmid]), label='adj_E_k', cmap=gray)
-plt.title('adjoint using E_k at slice %s'%Nmid)
 plt.show()
