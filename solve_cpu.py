@@ -14,8 +14,8 @@ def solve(nufft, y, solver=None, *args, **kwargs):
     The current version supports solvers = 'cg'.
 
     :param nufft: NUFFT_cpu object
-    :param y: (M,) array, non-uniform data, sampled ksp
-    :return: x: image
+    :param y: (M, batch) array, non-uniform data, sampled ksp
+    :return: x: batch image
 
     """
 
@@ -28,12 +28,12 @@ def solve(nufft, y, solver=None, *args, **kwargs):
         cg: conjugate gradient
         bicgstab: biconjugate gradient stablizing
         bicg: biconjugate gradient
-        gmres: 
-        lgmres:
+        gmres: Generalized Minimal RESidual iteration
+        lgmres: Linear Solver restarted GMRES
         """
 
     def spHsp(x):
-        k = x.reshape(nufft.Kd, order='C')
+        k = x.reshape((nufft.batch,)+nufft.Kd, order='C')
         k = nufft.k2y2k(k)
         return tf.reshape(k, (-1, 1))
 
@@ -49,6 +49,6 @@ def solve(nufft, y, solver=None, *args, **kwargs):
     k = nufft._y2k(y)
     k2 = methods[solver](A, k.numpy().ravel(), *args, **kwargs)
 
-    xx = nufft._k2xx(k2[0].reshape(nufft.Kd))
+    xx = nufft._k2xx(k2[0].reshape((nufft.batch,)+nufft.Kd))
     x = xx / nufft.sn
     return x
