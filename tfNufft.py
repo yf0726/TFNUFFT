@@ -163,9 +163,9 @@ class tfNUFFT:
         :rtype: Tensor with the dtype of self.dtype, tf.complex64 default
         """
         x = tf.cast(x, dtype=self.dtype)
-        k = self._x2xx(x) #Scaling with self.sn, scaling factor
-        k = self._xx2k(k) #fft
-        y = self._k2y(k) #A
+        k = self.x2xx(x) #Scaling with self.sn, scaling factor
+        k = self.xx2k(k) #fft
+        y = self.k2y(k) #A
         return y
 
     def adjoint(self, y):
@@ -177,9 +177,9 @@ class tfNUFFT:
         :return: x: The output tensor, with the size of (self.batch,) + self.Nd.
         :rtype: tensor with the dtype of tf.complex64
         """
-        k = self._y2k(y) #Non-uniform K space to gridded K space
-        k = self._k2xx(k) #ifft and cropping
-        x = self._xx2x(k) #scaling
+        k = self.y2k(y) #Non-uniform K space to gridded K space
+        k = self.k2xx(k) #ifft and cropping
+        x = self.xx2x(k) #scaling
         return x
 
     def selfadjoint(self, x):
@@ -191,11 +191,11 @@ class tfNUFFT:
         :return: x: The output tensor, with size = (self.batch,) + self.Nd
         :rtype: Tensor with dtype = tf.complex64
         """
-        x2 = self._xx2x(self._k2xx(self.k2y2k(self._xx2k(self._x2xx(x)))))
+        x2 = self.xx2x(self.k2xx(self.k2y2k(self.xx2k(self.x2xx(x)))))
 
         return x2
 
-    def _x2xx(self, x):
+    def x2xx(self, x):
         """
         Inplace multiplication of self.x_Nd by the scaling factor self.sn.
         :param x: The input equispaced image, with the size of (self.batch,) + self.Nd.
@@ -206,7 +206,7 @@ class tfNUFFT:
         xx = x * self.sn
         return xx
 
-    def _xx2k(self, xx):
+    def xx2k(self, xx):
         """
         In this step we perform oversampled FFT on padded frequency domain, shape self.Kd.
         Notice that the forward FFT does not perform normalization and the inverse transform are scaled by 1/n.
@@ -230,7 +230,7 @@ class tfNUFFT:
         k = tf.cast(k, dtype=self.dtype)
         return k
 
-    def _k2vec(self, k):
+    def k2vec(self, k):
         """
         :param k: The oversampled FFT data of input image, with size of (batch,) + self.Kd.
         :type: Tensor with dtype = self.dtype, tf.complex64 default
@@ -241,7 +241,7 @@ class tfNUFFT:
         k_vec = tf.transpose(k_vec)
         return k_vec
 
-    def _vec2y(self, k_vec):
+    def vec2y(self, k_vec):
         """
         :param k_vec: The vectorized FFT data.
         :type: Tensor with dtype = self.dtype, tf.complex64 default
@@ -252,7 +252,7 @@ class tfNUFFT:
         y = tf.sparse.sparse_dense_matmul(self.sp, k_vec)
         return y
 
-    def _k2y(self, k):
+    def k2y(self, k):
         """
         Generate k space data from oversampled FFT data.
         :param k: The oversampled FFT data, with size of (batch,) + self.Kd.
@@ -260,11 +260,11 @@ class tfNUFFT:
         :return: Non-uniform K space data, with size of self.M + (self.batch,)
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-        k = self._k2vec(k) #vectorized the oversampled FFT data
-        y = self._vec2y(k) #generate non-uniform K space data by the Sparse Matrix-Vector Multiplication
+        k = self.k2vec(k) #vectorized the oversampled FFT data
+        y = self.vec2y(k) #generate non-uniform K space data by the Sparse Matrix-Vector Multiplication
         return y
 
-    def _y2vec(self, y):
+    def y2vec(self, y):
         '''
         Re-gridding from non-uniform k space data.
         :param y: The k space data.
@@ -288,7 +288,7 @@ class tfNUFFT:
         k = tf.reshape(k_vec, (self.batch,)+self.Kd)
         return k
 
-    def _y2k(self, y):
+    def y2k(self, y):
         """
         Private: gridding by the Sparse Matrix-Vector Multiplication
         :param y: The non-uniform kspace data, with the size of self.M + (self.batch,)
@@ -296,15 +296,15 @@ class tfNUFFT:
         :return: Gridded FT data with shape (self.batch,) + self.Kd
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-        k_vec = self._y2vec(y)
+        k_vec = self.y2vec(y)
         k = self.vec2k(k_vec) #reshape vector to Kd
         # k = tf.cast(k, dtype=self.dtype)
         return k
 
-    def _k2xx(self, k):
+    def k2xx(self, k):
         """
         Private: the inverse FFT and image cropping (which is the reverse of
-                 _xx2k() method)
+                 xx2k() method)
         :param k: Gridded FT data with size (self.batch,) + self.Kd
         :type: Tensor with dtype = self.dtype, tf.complex64 default
         :return: Cropped FT data with size (self.batch,) + self.Nd
@@ -316,24 +316,28 @@ class tfNUFFT:
             k = tf.signal.ifft2d(k)
 
         if self.padding[0][1]>0: #if we padded the frequency domain
-            xx = k[:,
-                   :-1*self.padding[0][1],
-                   :-1*self.padding[1][1],
-                   :-1*self.padding[2][1]]
+            if len(self.Kd) == 3:
+                xx = k[:,
+                     :-1*self.padding[0][1],
+                     :-1*self.padding[2][1]]
+            elif len(self.Kd) == 2:
+                xx = k[:,
+                     :-1 * self.padding[0][1],
+                     :-1 * self.padding[1][1]]
         else:
             xx = k
         xx = tf.cast(xx, dtype=self.dtype)
         return xx
 
-    def _xx2x(self, xx):
+    def xx2x(self, xx):
         """
-        Private: rescaling, which is identical to the  _x2xx() method
+        Private: rescaling, which is identical to the  x2xx() method
         :param xx: The input image, with the size of (self.batch,) + self.Nd
         :type: Tensor with dtype = self.dtype, tf.complex64 default
         :return: The scaled image, with the size of (self.batch,) + self.Nd
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-        x = self._x2xx(xx)
+        x = self.x2xx(xx)
         return x
 
     def k2y2k(self, k):
@@ -345,9 +349,9 @@ class tfNUFFT:
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
         k = tf.cast(k, dtype=self.dtype)
-        Xk = self._k2vec(k)
-        y = self._vec2y(Xk)
-        y = self._y2vec(y)
+        Xk = self.k2vec(k)
+        y = self.vec2y(Xk)
+        y = self.y2vec(y)
         k = self.vec2k(y)
         return k
 
@@ -358,9 +362,9 @@ class tfNUFFT:
         # sp = tf.sparse.to_dense(self.sp) # error:Could not find valid device for node. Node:{{node SparseToDense}}
         sp = tf.cast(self.spdense, dtype=self.dtype)
         x = tf.cast(x, dtype=self.dtype)
-        k = self._x2xx(x) #Scaling with self.sn, scaling factor
-        k = self._xx2k(k) #fft
-        k_vec = self._k2vec(k) #vectorized the oversampled FFT data
+        k = self.x2xx(x) #Scaling with self.sn, scaling factor
+        k = self.xx2k(k) #fft
+        k_vec = self.k2vec(k) #vectorized the oversampled FFT data
         y = tf.linalg.matmul(sp, k_vec)
         return y
 
