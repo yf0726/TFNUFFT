@@ -131,7 +131,7 @@ class tfNUFFT:
     def solve(self, y, solver=None, *args, **kwargs):
         """
         Solve NUFFT.
-        :param y: data, tensor.complex64. The shape = (M,) or (M, self.batch)
+        :param y: data, tensor.complex64. The shape = (self.batch, M)
         :param solver: currently only 'cg' conjugate gradient is provided
         :param maxiter: the number of iterations
         :type y: Tensor, dtype = tensor.complex64
@@ -149,7 +149,7 @@ class tfNUFFT:
         Forward NUFFT
         :param x: The input tensor, with the size of (self.batch,) + self.Nd.
         :type: Tensor with the dtype of self.dtype, tf.complex64 default
-        :return: y: The output tensor, with the size of (M,) or (M, self.batch). sampled k space
+        :return: y: The output tensor, with the size of (self.batch, M). sampled k space
         :rtype: Tensor with the dtype of self.dtype, tf.complex64 default
         """
         x = tf.cast(x, dtype=self.dtype)
@@ -163,7 +163,7 @@ class tfNUFFT:
         """
         Adjoint NUFFT
 
-        :param y: The non-uniform kspace data, with the size of (M,) or (M, self.batch)
+        :param y: The non-uniform kspace data, with the size of (self.batch, M)
         :type: tensor with the dtype of tf.complex64
         :return: x: The output tensor, with the size of (self.batch,) + self.Nd.
         :rtype: tensor with the dtype of tf.complex64
