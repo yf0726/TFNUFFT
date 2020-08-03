@@ -39,7 +39,7 @@ class tfNUFFT:
         self.batch = None  # : initial value: None
         pass
 
-    def plan(self, om, Nd, Kd, Jd, batch=None):
+    def plan(self, om, Nd, Kd, Jd):
         """
         Plan the NUFFT object with the geometry provided.
 
@@ -83,26 +83,16 @@ class tfNUFFT:
 
         """
 
-        self.ndims = len(Nd)  # : initial value: len(Nd)
-        # if ft_axes is None:
-        #     ft_axes = range(0, self.ndims)
-        # self.ft_axes = ft_axes  # default: all axes (range(0, self.ndims)
+        self.batch = Nd[0]
+        self.Nd = Nd[1:]
+        self.ndims = len(self.Nd)  # : initial value: len(Nd)
+        self.Kd = Kd
+        self.Jd = Jd
 
-        self.st = helper.plan(om, Nd, Kd, Jd)
 
-        self.Nd = self.st['Nd']
-        self.Kd = self.st['Kd']
+        self.st = helper.plan(om, self.Nd, self.Kd, self.Jd)
+
         self.sn = self.st['sn']
-
-        # self.sn = tf.ones(shape=self.st['sn'].shape)
-
-        if batch is None:  # single-coil
-            # self.parallel_flag = 0
-            self.batch = 1
-        else:  # multi-coil
-            # self.parallel_flag = 1 #for current code multi-coil is not yet implemented
-            self.batch = batch
-
         self.M = (self.st['M'],)
 
         self.sp = self.st['p'].copy().tocsr()  # interpolator
@@ -166,6 +156,7 @@ class tfNUFFT:
         k = self.x2xx(x) #Scaling with self.sn, scaling factor
         k = self.xx2k(k) #fft
         y = self.k2y(k) #A
+        y = tf.transpose(y)
         return y
 
     def adjoint(self, y):
@@ -177,7 +168,7 @@ class tfNUFFT:
         :return: x: The output tensor, with the size of (self.batch,) + self.Nd.
         :rtype: tensor with the dtype of tf.complex64
         """
-        k = self.y2k(y) #Non-uniform K space to gridded K space
+        k = self.y2k(tf.transpose(y)) #Non-uniform K space to gridded K space
         k = self.k2xx(k) #ifft and cropping
         x = self.xx2x(k) #scaling
         return x
@@ -216,12 +207,13 @@ class tfNUFFT:
         :return: The oversampled FFT data, with the size of (self.batch,) + self.Kd
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-        self.padding = []
-        for (Nd, Kd) in zip(self.Nd, self.Kd):
-            self.padding.append([0, max(0, (Kd-Nd))])
-            #first dimension means zeros added before, second dimension means zeros added after
-
-        output_x = tf.pad(xx, tf.constant([[0, 0]]+self.padding), 'CONSTANT')# batch dimension does not need padding
+        if self.Nd[0] >= self.Kd[0]:
+            self.padding = tf.constant((0,) + self.Nd) - tf.constant((0,) + self.Kd)
+        else:
+            self.padding = tf.constant((0,) + self.Kd) - tf.constant((0,) + self.Nd)
+        self.padding = tf.reshape(self.padding, (-1,1))
+        self.padding = tf.concat([tf.zeros((len(self.padding), 1), dtype=tf.int32), self.padding], 1)
+        output_x = tf.pad(xx, self.padding, 'CONSTANT')# batch dimension does not need padding
 
         if len(self.Kd) == 3:
             k = tf.signal.fft3d(output_x)
@@ -248,7 +240,6 @@ class tfNUFFT:
         :return: Non-uniform K space data with size of self.M + (self.batch,)
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-        # y = tf.linalg.matmul(self.sp, k_vec)
         y = tf.sparse.sparse_dense_matmul(self.sp, k_vec)
         return y
 
@@ -272,8 +263,8 @@ class tfNUFFT:
         :return: Vectorized gridded FT data.
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         '''
-        # k_vec = tf.linalg.matmul(self.spH, y)
         k_vec = tf.sparse.sparse_dense_matmul(self.spH, y)
+
         return k_vec
 
     def vec2k(self, k_vec):
@@ -315,15 +306,15 @@ class tfNUFFT:
         elif len(self.Kd) == 2:
             k = tf.signal.ifft2d(k)
 
-        if self.padding[0][1]>0: #if we padded the frequency domain
+        if self.padding[1][1] > 0: #if we padded the frequency domain
             if len(self.Kd) == 3:
                 xx = k[:,
-                     :-1*self.padding[0][1],
-                     :-1*self.padding[2][1]]
+                     :-1*self.padding[1][1],
+                     :-1*self.padding[3][1]]
             elif len(self.Kd) == 2:
                 xx = k[:,
-                     :-1 * self.padding[0][1],
-                     :-1 * self.padding[1][1]]
+                     :-1 * self.padding[1][1],
+                     :-1 * self.padding[2][1]]
         else:
             xx = k
         xx = tf.cast(xx, dtype=self.dtype)
@@ -366,6 +357,7 @@ class tfNUFFT:
         k = self.xx2k(k) #fft
         k_vec = self.k2vec(k) #vectorized the oversampled FFT data
         y = tf.linalg.matmul(sp, k_vec)
+        y = tf.transpose(y)
         return y
 
 

@@ -25,9 +25,6 @@ new_traj[:,1] = traj[:,0]
 om = new_traj
 om = om / om.max() * 3  # normalized between (-pi,pi)
 
-Nd = image.shape  # time grid, tuple
-Kd = Nd  # frequency grid, tuple
-Jd = (3, 3, 3)  # interpolator
 
 # Nufft implementaion using numpy
 # pyNufftObj = pyNUFFT()
@@ -39,8 +36,12 @@ Jd = (3, 3, 3)  # interpolator
 batch_image = np.expand_dims(image, axis=0)
 batch_image = np.tile(batch_image, [3,1,1,1])
 
+Nd = batch_image.shape  # time grid, tuple
+Kd = Nd[1:]  # frequency grid, tuple
+Jd = (3, 3, 3)  # interpolator
+
 tfNufftObj = tfNUFFT()
-tfNufftObj.plan(om, Nd, Kd, Jd,batch_image.shape[0])
+tfNufftObj.plan(om, Nd, Kd, Jd)
 tfNufftObj.preapre_for_tf()
 kspace = tfNufftObj.forward(batch_image)
 adj_img1 = tfNufftObj.adjoint(kspace)
