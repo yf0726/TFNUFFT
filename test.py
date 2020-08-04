@@ -36,13 +36,14 @@ om = om / om.max() * 3  # normalized between (-pi,pi)
 batch_image = np.expand_dims(image, axis=0)
 batch_image = np.tile(batch_image, [3,1,1,1])
 
-Nd = batch_image.shape  # time grid, tuple
-Kd = Nd[1:]  # frequency grid, tuple
+Nd = image.shape  # time grid, tuple
+Kd = (Nd[0]*2, Nd[1]*2, Nd[2]*2)  # frequency grid, tuple
 Jd = (3, 3, 3)  # interpolator
 
 tfNufftObj = tfNUFFT()
 tfNufftObj.plan(om, Nd, Kd, Jd)
 tfNufftObj.preapre_for_tf()
+tfNufftObj.batch = batch_image.shape[0]
 kspace = tfNufftObj.forward(batch_image)
 adj_img1 = tfNufftObj.adjoint(kspace)
 

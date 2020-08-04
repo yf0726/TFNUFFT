@@ -30,12 +30,10 @@ class tfNUFFT:
         # >>> NufftObj = NUFFT()
         """
         self.dtype = tf.complex64  # : initial value: tf.complex64
-        self.debug = 0  #: initial value: 0
         self.Nd = ()  # : initial value: ()
         self.Kd = ()  # : initial value: ()
         self.Jd = ()  #: initial value: ()
         self.ndims = 0  # : initial value: 0
-        self.ft_axes = None  # : initial value: ()
         self.batch = None  # : initial value: None
         pass
 
@@ -82,13 +80,17 @@ class tfNUFFT:
         # >>> NufftObj.plan(om, Nd, Kd, Jd)
 
         """
-
-        self.batch = Nd[0]
-        self.Nd = Nd[1:]
-        self.ndims = len(self.Nd)  # : initial value: len(Nd)
+        self.Nd = Nd
+        self.ndims = len(self.Nd)
         self.Kd = Kd
         self.Jd = Jd
 
+        if self.Nd[0] >= self.Kd[0]:
+            self.padding = tf.constant((0,) + self.Nd) - tf.constant((0,) + self.Kd)
+        else:
+            self.padding = tf.constant((0,) + self.Kd) - tf.constant((0,) + self.Nd)
+        self.padding = tf.reshape(self.padding, (-1,1))
+        self.padding = tf.concat([tf.zeros((len(self.padding), 1), dtype=tf.int32), self.padding], 1)
 
         self.st = helper.plan(om, self.Nd, self.Kd, self.Jd)
 
@@ -207,17 +209,11 @@ class tfNUFFT:
         :return: The oversampled FFT data, with the size of (self.batch,) + self.Kd
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-        if self.Nd[0] >= self.Kd[0]:
-            self.padding = tf.constant((0,) + self.Nd) - tf.constant((0,) + self.Kd)
-        else:
-            self.padding = tf.constant((0,) + self.Kd) - tf.constant((0,) + self.Nd)
-        self.padding = tf.reshape(self.padding, (-1,1))
-        self.padding = tf.concat([tf.zeros((len(self.padding), 1), dtype=tf.int32), self.padding], 1)
         output_x = tf.pad(xx, self.padding, 'CONSTANT')# batch dimension does not need padding
 
-        if len(self.Kd) == 3:
+        if self.ndims == 3:
             k = tf.signal.fft3d(output_x)
-        elif len(self.Kd) == 2:
+        elif self.ndims == 2:
             k = tf.signal.fft2d(output_x)
         k = tf.cast(k, dtype=self.dtype)
         return k
@@ -226,10 +222,10 @@ class tfNUFFT:
         """
         :param k: The oversampled FFT data of input image, with size of (batch,) + self.Kd.
         :type: Tensor with dtype = self.dtype, tf.complex64 default
-        :return: The vectorized FFT data, with size of (self.Kdprod, self.batch)
+        :return: The vectorized FFT data, with size of (self.batch, self.Kdprod)
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-        k_vec = tf.reshape(k, (self.batch, -1))
+        k_vec = tf.reshape(k, (-1, self.Kdprod))
         k_vec = tf.transpose(k_vec)
         return k_vec
 
@@ -237,7 +233,7 @@ class tfNUFFT:
         """
         :param k_vec: The vectorized FFT data.
         :type: Tensor with dtype = self.dtype, tf.complex64 default
-        :return: Non-uniform K space data with size of self.M + (self.batch,)
+        :return: Non-uniform K space data with size of (self.batch,) + self.M
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
         y = tf.sparse.sparse_dense_matmul(self.sp, k_vec)
@@ -248,7 +244,7 @@ class tfNUFFT:
         Generate k space data from oversampled FFT data.
         :param k: The oversampled FFT data, with size of (batch,) + self.Kd.
         :type: Tensor with dtype = self.dtype, tf.complex64 default
-        :return: Non-uniform K space data, with size of self.M + (self.batch,)
+        :return: Non-uniform K space data, with size of (self.batch,) + self.M
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
         k = self.k2vec(k) #vectorized the oversampled FFT data
@@ -276,13 +272,13 @@ class tfNUFFT:
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         '''
         k_vec = tf.transpose(k_vec)
-        k = tf.reshape(k_vec, (self.batch,)+self.Kd)
+        k = tf.reshape(k_vec, (-1,)+self.Kd)
         return k
 
     def y2k(self, y):
         """
         Private: gridding by the Sparse Matrix-Vector Multiplication
-        :param y: The non-uniform kspace data, with the size of self.M + (self.batch,)
+        :param y: The non-uniform kspace data, with the size of (self.batch,) + self.M
         :type: Tensor with dtype = self.dtype, tf.complex64 default
         :return: Gridded FT data with shape (self.batch,) + self.Kd
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
@@ -301,17 +297,18 @@ class tfNUFFT:
         :return: Cropped FT data with size (self.batch,) + self.Nd
         :rtype: Tensor with dtype = self.dtype, tf.complex64 default
         """
-        if len(self.Kd) == 3:
+        if self.ndims == 3:
             k = tf.signal.ifft3d(k)
-        elif len(self.Kd) == 2:
+        elif self.ndims == 2:
             k = tf.signal.ifft2d(k)
 
         if self.padding[1][1] > 0: #if we padded the frequency domain
-            if len(self.Kd) == 3:
+            if self.ndims == 3:
                 xx = k[:,
                      :-1*self.padding[1][1],
+                     :-1*self.padding[2][1],
                      :-1*self.padding[3][1]]
-            elif len(self.Kd) == 2:
+            elif self.ndims == 2:
                 xx = k[:,
                      :-1 * self.padding[1][1],
                      :-1 * self.padding[2][1]]
